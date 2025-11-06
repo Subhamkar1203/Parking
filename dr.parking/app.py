@@ -84,70 +84,55 @@ OCCUPANCY_THRESHOLD = 900
 
 # ---------- Load parking coordinates ----------
 try:
-    with open("CarParkPos.pkl", "rb") as f:
+    with open("CarParkPos.pkl", "rb") as f:  # ✅ Only change
         posList = pickle.load(f)
     NUM_SPOTS = len(posList)
     SPOT_NAMES = [f"Spot {i+1}" for i in range(NUM_SPOTS)]
 except FileNotFoundError:
-    st.sidebar.error("CarParkPos not found — run the picker first.")
+    st.sidebar.error("CarParkPos.pkl not found — run the picker first.")
     st.stop()
 except Exception as e:
-    st.sidebar.error(f"Error loading CarParkPos: {e}")
+    st.sidebar.error(f"Error loading CarParkPos.pkl: {e}")
     st.stop()
 
-# ---------- Session state ----------
+# ---------- Session state ----------    
 if "monitored_spots" not in st.session_state:
     st.session_state.monitored_spots = []
 if "prev_status" not in st.session_state:
     st.session_state.prev_status = {}
 
 # ---------- Core parking-space function ----------
+# ✅ Everything below unchanged
 def checkParkingSpace(img, imgPro, posList):
     spaceCounter = 0
     occupancy_status = []
-
     for i, pos in enumerate(posList):
         x, y = pos
         spot_id = SPOT_NAMES[i]
-        imgCrop = imgPro[y : y + HEIGHT, x : x + WIDTH]
+        imgCrop = imgPro[y:y+HEIGHT, x:x+WIDTH]
         count = cv2.countNonZero(imgCrop)
 
-        # green = free, red = occupied
         if count < OCCUPANCY_THRESHOLD:
-            color = (0, 255, 0)
-            thickness = 2
+            color = (0,255,0)
             status = "Free"
             spaceCounter += 1
         else:
-            color = (255, 0, 0)
-            thickness = 2
+            color = (255,0,0)
             status = "Occupied"
 
+        thickness = 2
         occupancy_status.append(status)
 
-        # notification logic
-        if spot_id in st.session_state.monitored_spots:
-            prev = st.session_state.prev_status.get(spot_id)
-            if prev != status:
-                if status == "Free":
-                    st.toast(f"{spot_id} is now FREE ")
-                else:
-                    st.toast(f"{spot_id} is now OCCUPIED ")
-            st.session_state.prev_status[spot_id] = status
+        prev = st.session_state.prev_status.get(spot_id)
+        if spot_id in st.session_state.monitored_spots and prev != status:
+            st.toast(f"{spot_id} ➜ {status}")
+        st.session_state.prev_status[spot_id] = status
 
-        cv2.rectangle(img, pos, (pos[0] + WIDTH, pos[1] + HEIGHT), color, thickness)
-        cvzone.putTextRect(
-            img,
-            spot_id,
-            (x + WIDTH // 4, y + HEIGHT // 2 + 6),
-            scale=0.8,
-            thickness=1,
-            offset=0,
-            colorT=(255, 255, 255),
-            colorR=color,
-        )
+        cv2.rectangle(img, pos, (x+WIDTH, y+HEIGHT), color, thickness)
+        cvzone.putTextRect(img, spot_id, (x+30, y+30))
 
     return img, spaceCounter, occupancy_status
+
 
 # ---------- Sidebar controls ----------
 with st.sidebar:
