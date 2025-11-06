@@ -81,21 +81,19 @@ st.markdown(
 # ---------- Constants ----------
 WIDTH, HEIGHT = 105, 40
 OCCUPANCY_THRESHOLD = 900
-VIDEO_PATH = "carPark.mp4" # <--- FIXED: Assuming the file is now in the same directory as app.py
-PICKLE_PATH = "CarParkPos.pkl" # <--- FIXED: Use direct path if possible
 
 # ---------- Load parking coordinates ----------
 try:
-    with open(PICKLE_PATH, "rb") as f:
+    with open("dr.parking/CarParkPos.pkl", "rb") as f:
         posList = pickle.load(f)
 
     NUM_SPOTS = len(posList)
     SPOT_NAMES = [f"Spot {i+1}" for i in range(NUM_SPOTS)]
 except FileNotFoundError:
-    st.sidebar.error(f"{PICKLE_PATH} not found — run the picker first.")
+    st.sidebar.error("CarParkPos.pkl not found — run the picker first.")
     st.stop()
 except Exception as e:
-    st.sidebar.error(f"Error loading {PICKLE_PATH}: {e}")
+    st.sidebar.error(f"Error loading CarParkPos.pkl: {e}")
     st.stop()
 
 # ---------- Session state ----------
@@ -132,11 +130,10 @@ def checkParkingSpace(img, imgPro, posList):
         if spot_id in st.session_state.monitored_spots:
             prev = st.session_state.prev_status.get(spot_id)
             if prev != status:
-                # Use st.toast for modern, non-blocking notifications
                 if status == "Free":
-                    st.toast(f"✅ {spot_id} is now FREE")
+                    st.toast(f"{spot_id} is now FREE ")
                 else:
-                    st.toast(f"🛑 {spot_id} is now OCCUPIED")
+                    st.toast(f"{spot_id} is now OCCUPIED ")
             st.session_state.prev_status[spot_id] = status
 
         cv2.rectangle(img, pos, (pos[0] + WIDTH, pos[1] + HEIGHT), color, thickness)
@@ -160,11 +157,9 @@ with st.sidebar:
 
     source_mode = st.selectbox("Video Source", ["Demo video", "Live stream (IP/RTSP)"])
     if source_mode == "Live stream (IP/RTSP)":
-        # Note: This will only work if the stream URL is publicly accessible, not local network IPs.
-        stream_url = st.text_input("Stream URL", "http://example.com/stream/video.mjpg")
+        stream_url = st.text_input("Stream URL", "http://192.168.1.100:8080/video")
     else:
-        # Use the corrected path for deployment
-        stream_url = VIDEO_PATH 
+        stream_url = "dr.parking/carPark.mp4"
 
 
     st.markdown("---")
@@ -199,7 +194,7 @@ with st.sidebar:
                 st.info("Monitoring disabled")
             st.markdown("</div>", unsafe_allow_html=True)
 
-    st.markdown("<div class='muted'>Tip: For live monitoring on deployment, consider using `streamlit-webrtc` for camera access.</div>", unsafe_allow_html=True)
+    st.markdown("<div class='muted'>Tip: You can use a mobile IP camera app for live monitoring.</div>", unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
 # ---------- Main dashboard ----------
@@ -209,7 +204,6 @@ with left:
     st.markdown("<div class='card'>", unsafe_allow_html=True)
     st.markdown("### Live Parking Feed")
     video_placeholder = st.empty()
-    frame_counter_placeholder = st.empty() # Added for debugging
     st.markdown("</div>", unsafe_allow_html=True)
 
 with right:
@@ -224,29 +218,23 @@ with right:
     occ_box = st.empty()
     st.markdown("</div>", unsafe_allow_html=True)
 
-# ---------- Video processing loop ----------
+# ---------- Video processing ----------
 cap = cv2.VideoCapture(stream_url)
 if not cap.isOpened():
-    st.error(f"Could not open video source: {stream_url}")
+    st.error("Could not open video source.")
     st.stop()
-
-# Initialize frame count for display
-frame_count = 0
 
 try:
     while cap.isOpened():
         success, img = cap.read()
-        
         if not success:
             if source_mode == "Demo video":
-                # Loop the video for the demo mode
                 cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
                 continue
             else:
                 st.error("Stream ended or unavailable.")
                 break
 
-        # --- Image Processing Pipeline ---
         imgGray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         imgBlur = cv2.GaussianBlur(imgGray, (3, 3), 1)
         imgThreshold = cv2.adaptiveThreshold(
@@ -256,10 +244,8 @@ try:
         kernel = np.ones((3, 3), np.uint8)
         imgDilate = cv2.dilate(imgMedian, kernel, iterations=1)
 
-        # --- Parking Space Check ---
         img_result, free_spaces, status_list = checkParkingSpace(img.copy(), imgDilate, posList)
 
-        # --- Update Metrics ---
         free_metric.markdown(
             f"<div class='metric'><div style='color:#a7f3d0'>Free</div><div style='font-size:26px;font-weight:700'>{free_spaces}</div></div>",
             unsafe_allow_html=True,
@@ -280,14 +266,7 @@ try:
         free_box.markdown(f"<div>{make_badges(free_spots, 'badge-free')}</div>", unsafe_allow_html=True)
         occ_box.markdown(f"<div>{make_badges(occ_spots, 'badge-occ')}</div>", unsafe_allow_html=True)
 
-        # --- Display Frame ---
         video_placeholder.image(cv2.cvtColor(img_result, cv2.COLOR_BGR2RGB), channels="RGB", use_container_width=True)
-        
-        # Update frame counter to show the loop is running
-        frame_count += 1
-        frame_counter_placeholder.caption(f"Frames Processed: **{frame_count}**")
-
-        # Removed time.sleep(0.03) to prevent freezing on deployment
-
+        time.sleep(0.03)
 finally:
     cap.release()
