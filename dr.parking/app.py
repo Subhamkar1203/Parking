@@ -129,4 +129,3 @@ except Exception as e:
 finally:
     cap.release()
 
-this is code A rember
