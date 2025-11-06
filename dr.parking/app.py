@@ -267,6 +267,6 @@ try:
         occ_box.markdown(f"<div>{make_badges(occ_spots, 'badge-occ')}</div>", unsafe_allow_html=True)
 
         video_placeholder.image(cv2.cvtColor(img_result, cv2.COLOR_BGR2RGB), channels="RGB", use_container_width=True)
-        st.experimental_rerun()
+        time.sleep(0.03)
 finally:
     cap.release()
