@@ -84,8 +84,9 @@ OCCUPANCY_THRESHOLD = 900
 
 # ---------- Load parking coordinates ----------
 try:
-    with open("CarParkPos", "rb") as f:
-        posList = pickle.load(f)
+    with open("dr.parking/CarParkPos", "rb") as f:
+    posList = pickle.load(f)
+
     NUM_SPOTS = len(posList)
     SPOT_NAMES = [f"Spot {i+1}" for i in range(NUM_SPOTS)]
 except FileNotFoundError:
@@ -158,7 +159,7 @@ with st.sidebar:
     if source_mode == "Live stream (IP/RTSP)":
         stream_url = st.text_input("Stream URL", "http://192.168.1.100:8080/video")
     else:
-        stream_url = "carPark.mp4"
+       stream_url = "dr.parking/carPark.mp4"
 
     st.markdown("---")
 
