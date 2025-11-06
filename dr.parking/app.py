@@ -233,9 +233,9 @@ total_metric = st.empty()
 free_box = st.empty()
 occ_box = st.empty()
 
-# Use session state to store frame index for demo video looping
-if "frame_index" not in st.session_state:
-    st.session_state.frame_index = 0
+# Use session state to track if video ended
+if "video_ended" not in st.session_state:
+    st.session_state.video_ended = False
 
 def process_frame():
     success, img = cap.read()
@@ -246,8 +246,8 @@ def process_frame():
             cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
             success, img = cap.read()
         else:
-            st.error("Stream ended or unavailable.")
-            return None
+            st.session_state.video_ended = True
+            return False
 
     # Image processing
     imgGray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -289,10 +289,10 @@ def process_frame():
     video_placeholder.image(cv2.cvtColor(img_result, cv2.COLOR_BGR2RGB), channels="RGB", use_container_width=True)
     return True
 
-# Use Streamlit’s "autorefresh" to update frame every ~30ms
-st_autorefresh = st.experimental_singleton(lambda: None)  # placeholder for singleton
+# Main loop using Streamlit rerun
+if not st.session_state.video_ended:
+    if process_frame():
+        st.experimental_rerun()  # Refresh app non-blocking to get next frame
 
-while True:
-    if not process_frame():
-        break
-    st.experimental_rerun()
+# Release capture when done
+cap.release()
