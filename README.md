@@ -38,7 +38,7 @@ A **Streamlit-powered Smart Parking Monitoring System** using **OpenCV** and **c
 
 ```bash
 git clone https://github.com/Subhamkar1203/Parking.git
-cd Parking
+cd dr.parking
 ```
 
 
