@@ -81,19 +81,21 @@ st.markdown(
 # ---------- Constants ----------
 WIDTH, HEIGHT = 105, 40
 OCCUPANCY_THRESHOLD = 900
+VIDEO_PATH = "dr.parking/carPark.mp4" # <--- Restored your original path
+PICKLE_PATH = "dr.parking/CarParkPos.pkl" # <--- Restored your original path
 
 # ---------- Load parking coordinates ----------
 try:
-    with open("dr.parking/CarParkPos.pkl", "rb") as f:
+    with open(PICKLE_PATH, "rb") as f:
         posList = pickle.load(f)
 
     NUM_SPOTS = len(posList)
     SPOT_NAMES = [f"Spot {i+1}" for i in range(NUM_SPOTS)]
 except FileNotFoundError:
-    st.sidebar.error("CarParkPos.pkl not found — run the picker first.")
+    st.sidebar.error(f"{PICKLE_PATH} not found — run the picker first.")
     st.stop()
 except Exception as e:
-    st.sidebar.error(f"Error loading CarParkPos.pkl: {e}")
+    st.sidebar.error(f"Error loading {PICKLE_PATH}: {e}")
     st.stop()
 
 # ---------- Session state ----------
@@ -131,9 +133,9 @@ def checkParkingSpace(img, imgPro, posList):
             prev = st.session_state.prev_status.get(spot_id)
             if prev != status:
                 if status == "Free":
-                    st.toast(f"{spot_id} is now FREE ")
+                    st.toast(f"✅ {spot_id} is now FREE")
                 else:
-                    st.toast(f"{spot_id} is now OCCUPIED ")
+                    st.toast(f"🛑 {spot_id} is now OCCUPIED")
             st.session_state.prev_status[spot_id] = status
 
         cv2.rectangle(img, pos, (pos[0] + WIDTH, pos[1] + HEIGHT), color, thickness)
@@ -159,7 +161,8 @@ with st.sidebar:
     if source_mode == "Live stream (IP/RTSP)":
         stream_url = st.text_input("Stream URL", "http://192.168.1.100:8080/video")
     else:
-        stream_url = "dr.parking/carPark.mp4"
+        # Uses your original path
+        stream_url = VIDEO_PATH 
 
 
     st.markdown("---")
@@ -194,7 +197,7 @@ with st.sidebar:
                 st.info("Monitoring disabled")
             st.markdown("</div>", unsafe_allow_html=True)
 
-    st.markdown("<div class='muted'>Tip: You can use a mobile IP camera app for live monitoring.</div>", unsafe_allow_html=True)
+    st.markdown("<div class='muted'>Tip: For deployed live monitoring, use publicly accessible streams or consider `streamlit-webrtc`.</div>", unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
 # ---------- Main dashboard ----------
@@ -204,6 +207,7 @@ with left:
     st.markdown("<div class='card'>", unsafe_allow_html=True)
     st.markdown("### Live Parking Feed")
     video_placeholder = st.empty()
+    frame_counter_placeholder = st.empty()
     st.markdown("</div>", unsafe_allow_html=True)
 
 with right:
@@ -218,23 +222,28 @@ with right:
     occ_box = st.empty()
     st.markdown("</div>", unsafe_allow_html=True)
 
-# ---------- Video processing ----------
+# ---------- Video processing loop ----------
 cap = cv2.VideoCapture(stream_url)
 if not cap.isOpened():
-    st.error("Could not open video source.")
+    st.error(f"Could not open video source: {stream_url}. Check if the file path is correct on the remote server.")
     st.stop()
+
+frame_count = 0
 
 try:
     while cap.isOpened():
         success, img = cap.read()
+        
         if not success:
             if source_mode == "Demo video":
+                # Loop the video for the demo mode by resetting to frame 0
                 cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
                 continue
             else:
                 st.error("Stream ended or unavailable.")
                 break
 
+        # --- Image Processing Pipeline ---
         imgGray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         imgBlur = cv2.GaussianBlur(imgGray, (3, 3), 1)
         imgThreshold = cv2.adaptiveThreshold(
@@ -244,8 +253,10 @@ try:
         kernel = np.ones((3, 3), np.uint8)
         imgDilate = cv2.dilate(imgMedian, kernel, iterations=1)
 
+        # --- Parking Space Check ---
         img_result, free_spaces, status_list = checkParkingSpace(img.copy(), imgDilate, posList)
 
+        # --- Update Metrics ---
         free_metric.markdown(
             f"<div class='metric'><div style='color:#a7f3d0'>Free</div><div style='font-size:26px;font-weight:700'>{free_spaces}</div></div>",
             unsafe_allow_html=True,
@@ -266,7 +277,14 @@ try:
         free_box.markdown(f"<div>{make_badges(free_spots, 'badge-free')}</div>", unsafe_allow_html=True)
         occ_box.markdown(f"<div>{make_badges(occ_spots, 'badge-occ')}</div>", unsafe_allow_html=True)
 
+        # --- Display Frame ---
         video_placeholder.image(cv2.cvtColor(img_result, cv2.COLOR_BGR2RGB), channels="RGB", use_container_width=True)
-        time.sleep(0.03)
+        
+        # Update frame counter to show the loop is running
+        frame_count += 1
+        frame_counter_placeholder.caption(f"Frames Processed: **{frame_count}**")
+
+        # FIX: Removed the time.sleep(0.03) to fix freezing/stuttering on deployment
+
 finally:
     cap.release()
