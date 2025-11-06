@@ -159,7 +159,8 @@ with st.sidebar:
     if source_mode == "Live stream (IP/RTSP)":
         stream_url = st.text_input("Stream URL", "http://192.168.1.100:8080/video")
     else:
-        stream_url = "carPark.mp4"
+    stream_url = "dr.parking/carPark.mp4"
+
 
     st.markdown("---")
 
