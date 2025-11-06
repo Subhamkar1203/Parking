@@ -224,49 +224,75 @@ if not cap.isOpened():
     st.error("Could not open video source.")
     st.stop()
 
-try:
-    while cap.isOpened():
-        success, img = cap.read()
-        if not success:
-            if source_mode == "Demo video":
-                cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-                continue
-            else:
-                st.error("Stream ended or unavailable.")
-                break
+kernel = np.ones((3, 3), np.uint8)  # Precompute kernel
 
-        imgGray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        imgBlur = cv2.GaussianBlur(imgGray, (3, 3), 1)
-        imgThreshold = cv2.adaptiveThreshold(
-            imgBlur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 25, 16
-        )
-        imgMedian = cv2.medianBlur(imgThreshold, 5)
-        kernel = np.ones((3, 3), np.uint8)
-        imgDilate = cv2.dilate(imgMedian, kernel, iterations=1)
+# Create placeholders
+video_placeholder = st.empty()
+free_metric = st.empty()
+total_metric = st.empty()
+free_box = st.empty()
+occ_box = st.empty()
 
-        img_result, free_spaces, status_list = checkParkingSpace(img.copy(), imgDilate, posList)
+# Use session state to store frame index for demo video looping
+if "frame_index" not in st.session_state:
+    st.session_state.frame_index = 0
 
-        free_metric.markdown(
-            f"<div class='metric'><div style='color:#a7f3d0'>Free</div><div style='font-size:26px;font-weight:700'>{free_spaces}</div></div>",
-            unsafe_allow_html=True,
-        )
-        total_metric.markdown(
-            f"<div class='metric'><div style='color:#94a3b8'>Total</div><div style='font-size:26px;font-weight:700'>{len(posList)}</div></div>",
-            unsafe_allow_html=True,
-        )
+def process_frame():
+    success, img = cap.read()
+    
+    # Loop demo video if ended
+    if not success:
+        if source_mode == "Demo video":
+            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+            success, img = cap.read()
+        else:
+            st.error("Stream ended or unavailable.")
+            return None
 
-        free_spots = [SPOT_NAMES[i] for i, s in enumerate(status_list) if s == "Free"]
-        occ_spots = [SPOT_NAMES[i] for i, s in enumerate(status_list) if s == "Occupied"]
+    # Image processing
+    imgGray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    imgBlur = cv2.GaussianBlur(imgGray, (3, 3), 1)
+    imgThreshold = cv2.adaptiveThreshold(
+        imgBlur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 25, 16
+    )
+    imgMedian = cv2.medianBlur(imgThreshold, 5)
+    imgDilate = cv2.dilate(imgMedian, kernel, iterations=1)
 
-        def make_badges(lst, cls):
-            if not lst:
-                return "<div class='badge badge-muted'>None</div>"
-            return " ".join([f"<span class='badge {cls}'>{x}</span>" for x in lst])
+    # Parking detection
+    img_result, free_spaces, status_list = checkParkingSpace(img.copy(), imgDilate, posList)
 
-        free_box.markdown(f"<div>{make_badges(free_spots, 'badge-free')}</div>", unsafe_allow_html=True)
-        occ_box.markdown(f"<div>{make_badges(occ_spots, 'badge-occ')}</div>", unsafe_allow_html=True)
+    # Update metrics
+    free_metric.markdown(
+        f"<div class='metric'><div style='color:#a7f3d0'>Free</div>"
+        f"<div style='font-size:26px;font-weight:700'>{free_spaces}</div></div>",
+        unsafe_allow_html=True,
+    )
+    total_metric.markdown(
+        f"<div class='metric'><div style='color:#94a3b8'>Total</div>"
+        f"<div style='font-size:26px;font-weight:700'>{len(posList)}</div></div>",
+        unsafe_allow_html=True,
+    )
 
-        video_placeholder.image(cv2.cvtColor(img_result, cv2.COLOR_BGR2RGB), channels="RGB", use_container_width=True)
-        time.sleep(0.03)
-finally:
-    cap.release()
+    # Update badge boxes
+    free_spots = [SPOT_NAMES[i] for i, s in enumerate(status_list) if s == "Free"]
+    occ_spots = [SPOT_NAMES[i] for i, s in enumerate(status_list) if s == "Occupied"]
+
+    def make_badges(lst, cls):
+        if not lst:
+            return "<div class='badge badge-muted'>None</div>"
+        return " ".join([f"<span class='badge {cls}'>{x}</span>" for x in lst])
+
+    free_box.markdown(f"<div>{make_badges(free_spots, 'badge-free')}</div>", unsafe_allow_html=True)
+    occ_box.markdown(f"<div>{make_badges(occ_spots, 'badge-occ')}</div>", unsafe_allow_html=True)
+
+    # Update video frame
+    video_placeholder.image(cv2.cvtColor(img_result, cv2.COLOR_BGR2RGB), channels="RGB", use_container_width=True)
+    return True
+
+# Use Streamlit’s "autorefresh" to update frame every ~30ms
+st_autorefresh = st.experimental_singleton(lambda: None)  # placeholder for singleton
+
+while True:
+    if not process_frame():
+        break
+    st.experimental_rerun()
