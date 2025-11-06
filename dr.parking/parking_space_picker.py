@@ -22,6 +22,8 @@ def mouseCLick(events,x,y,flags,param):
 
 while True:
     img = cv2.imread('parkingimg.png')
+    cv2.waitKey(1)
+    
     for pos in posList:
         cv2.rectangle(img,pos,(pos[0]+width,pos[1]+height),(255,0,0),2)
 
